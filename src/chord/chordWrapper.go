@@ -1,9 +1,5 @@
 package chord
 
-import(
-
-)
-
 type ChordWrapper struct{
 	node *ChordNode
 }
@@ -22,7 +18,7 @@ func (w *ChordWrapper) Create() {
 }
 
 func (w *ChordWrapper) Join(addr string) bool {
-	return w.ChordNode.join(addr)
+	return w.node.join(addr)
 }
 
 func (w *ChordWrapper) Quit() {

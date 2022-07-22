@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/rpc"
 	"time"
+	"fmt"
 )
 
 const (
@@ -14,6 +15,7 @@ const (
 	successorListLen  = 5
 	maintainTime      = 200 * time.Millisecond
 	dialTime          = 500 * time.Millisecond
+	pingTime          = 500 * time.Millisecond
 )
 
 var (
@@ -21,7 +23,12 @@ var (
 	mod = new(big.Int).Exp(two,big.NewInt(int64(M)),nil)
 )
 
-func myAccpet(server *rpc.Server,listener ner.Listener,n *ChordNode) {
+type Pair struct {
+	Key   string
+	Value string
+}
+
+func myAccept(server *rpc.Server,listener net.Listener,n *ChordNode) {
 	for {
 		conn,err:=listener.Accept()
 		select {
@@ -31,7 +38,7 @@ func myAccpet(server *rpc.Server,listener ner.Listener,n *ChordNode) {
 			if err!=nil{
 				return
 			}
-			go server.ServeComm(conn)
+			go server.ServeConn(conn)
 		}
 	}
 }
@@ -43,7 +50,7 @@ func id(addr string) *big.Int {
 }
 
 func closeClient(client *rpc.Client) {
-	err:=client.Close()
+	_=client.Close()
 }
 
 func Dial(addr string) (*rpc.Client,error) {
@@ -59,17 +66,17 @@ func Dial(addr string) (*rpc.Client,error) {
 			errChan<-err
 		}()
 		select{
-		case <-errChan:
-			if err==nil{
+		case err=<-errChan:
+			if err==nil {
 				return client,nil
-			}
-			else{
+			} else {
 				return nil,err
 			}
 		case <-time.After(dialTime):
-			err=errors.New(fmt.Sprintln("dail TLE",addr))
+			err=errors.New(fmt.Sprintln("dail a time",addr))
 		}
 	}
+	err=errors.New(fmt.Sprintln("dail TLE",addr))
 	return nil,err
 }
 
@@ -106,13 +113,36 @@ func Ping(addr string) bool {
 		select{
 		case <-errChan:
 			if err==nil{
-				return client,nil
+				_ = client.Close()
+				return true
+			} else {
+				return false
 			}
-			else{
-				return nil,err
-			}
-		case <-time.After(dialTime):
-			err=errors.New(fmt.Sprintln("dail TLE",addr))
+		case <-time.After(pingTime):
+			err=errors.New(fmt.Sprintln("ping a time",addr))
+		}
+	}
+	return false
+}
+
+func isIn(key,start,end *big.Int,endStatus bool) bool {
+	if start.Cmp(end)<0 {
+		if start.Cmp(key)>=0 {
+			return false
+		}
+		if endStatus {
+			return key.Cmp(end)<=0
+		} else {
+			return key.Cmp(end)<0
+		}
+	} else {
+		if start.Cmp(key)<0{
+			return true
+		}
+		if endStatus {
+			return key.Cmp(end)<=0
+		} else {
+			return key.Cmp(end)<0
 		}
 	}
 }
