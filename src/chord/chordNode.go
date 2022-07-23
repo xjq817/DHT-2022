@@ -123,7 +123,6 @@ func (n *ChordNode) join(addr string) bool {
 	if suc!=n.addr {
 		n.storeLock.Lock()
 		err=remoteCall(suc,"chordNode.transferData",n.addr,&n.store)
-		///transferData
 		n.storeLock.Unlock()
 		if err!=nil {
 			return false
