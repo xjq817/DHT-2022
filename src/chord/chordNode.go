@@ -9,7 +9,7 @@ import(
 	"time"
 )
 
-type ChordNode struct{
+type ChordNode struct {
 	addr              string
 
 	predecessor       string
@@ -67,23 +67,20 @@ func (n *ChordNode) create() {
 	n.onlineLock.Lock()
 	n.online=true
 	n.onlineLock.Unlock()
-
 	n.successorListLock.Lock()
 	n.successorList[0]=n.addr
 	n.successorListLock.Unlock()
-
+	n.predecessorLock.Lock()
+	n.predecessor=n.addr
+	n.predecessorLock.Unlock()
 	n.fingerTableLock.Lock()
 	for i:=0;i<M;i++ {
 		n.fingerTable[i]=n.addr
 	}
 	n.fingerTableLock.Unlock()
-
-	n.predecessorLock.Lock()
-	n.predecessor=n.addr
-	n.predecessorLock.Unlock()
 }
 
-func (n *ChordNode) getSuccessorList (_ string,reply *[successorListLen]string) error {
+func (n *ChordNode) GetSuccessorList(_ string,reply *[successorListLen]string) error {
 	n.successorListLock.RLock()
 	*reply=n.successorList
 	n.successorListLock.RUnlock()
@@ -91,26 +88,23 @@ func (n *ChordNode) getSuccessorList (_ string,reply *[successorListLen]string) 
 }
 
 func (n *ChordNode) join(addr string) bool {
-	n.onlineLock.RLock()
 	if n.online{
-		n.onlineLock.RUnlock()
 		return false
 	}
-	n.onlineLock.RUnlock()
 	n.predecessorLock.Lock()
 	n.predecessor=""
 	n.predecessorLock.Unlock()
 	var suc string
-	err := remoteCall(n.addr,"chordNode.findSuccessor",id(n.addr),&suc)
+	err := remoteCall(n.addr,"ChordNode.FindSuccessor",id(n.addr),&suc)
 	if err!=nil {
 		return false
 	}
 	var sucList [successorListLen]string
-	err = remoteCall(suc,"chordNode.getSuccessorList","",&sucList)
-	n.successorListLock.Lock()
+	err = remoteCall(suc,"ChordNode.GetSuccessorList","",&sucList)
 	if err!=nil {
 		return false
 	}
+	n.successorListLock.Lock()
 	n.successorList[0]=suc
 	cnt:=1
 	for i:=1;i<successorListLen;i++ {
@@ -122,22 +116,19 @@ func (n *ChordNode) join(addr string) bool {
 	n.successorListLock.Unlock()
 	if suc!=n.addr {
 		n.storeLock.Lock()
-		err=remoteCall(suc,"chordNode.transferData",n.addr,&n.store)
+		err=remoteCall(suc,"ChordNode.TransferData",n.addr,&n.store)
 		n.storeLock.Unlock()
 		if err!=nil {
 			return false
 		}
 	}
-	n.onlineLock.Lock()
-	n.online=true
-	n.onlineLock.Unlock()
 	n.fingerTableLock.Lock()
 	n.fingerTable[0]=suc
 	n.fingerTableLock.Unlock()
 	nId:=id(n.addr)
 	for i:=1;i<M;i++ {
 		var fingerNodeIth string
-		err=remoteCall(suc,"chordNode.findSuccessor",whereMod(nId,i),&fingerNodeIth)
+		err=remoteCall(suc,"ChordNode.FindSuccessor",whereMod(nId,i),&fingerNodeIth)
 		if err!=nil {
 			fingerNodeIth=""
 		}
@@ -145,10 +136,13 @@ func (n *ChordNode) join(addr string) bool {
 		n.fingerTable[i]=fingerNodeIth
 		n.fingerTableLock.Unlock()
 	}
+	n.onlineLock.Lock()
+	n.online=true
+	n.onlineLock.Unlock()
 	return true
 }
 
-func (n *ChordNode) deletePreStore(toStore *map[string]string,_ *string) error {
+func (n *ChordNode) DeletePreStore(toStore *map[string]string,_ *string) error {
 	n.preStoreLock.Lock()
 	for i,_:=range *toStore {
 		delete(n.preStore,i)
@@ -157,11 +151,12 @@ func (n *ChordNode) deletePreStore(toStore *map[string]string,_ *string) error {
 	return nil
 }
 
-func (n *ChordNode) transferData(to string,toStore *map[string]string) error {
+func (n *ChordNode) TransferData(to string,toStore *map[string]string) error {
 	toId:=id(to)
 	nId:=id(n.addr)
 	n.storeLock.Lock()
 	n.preStoreLock.Lock()
+	n.preStore=make(map[string]string)
 	for i,v:=range n.store {
 		if !isIn(id(i),toId,nId,true) {
 			(*toStore)[i]=v
@@ -172,19 +167,19 @@ func (n *ChordNode) transferData(to string,toStore *map[string]string) error {
 	n.storeLock.Unlock()
 	n.preStoreLock.Unlock()
 	var suc string
-	err:=n.findItsSuccessor("",&suc)
+	err:=n.FindItsSuccessor("",&suc)
 	if err!=nil {
 		return err
 	}
 	if suc!=to {
-		err=remoteCall(suc,"chordNode.deletePreStore",toStore,nil)
+		err=remoteCall(suc,"ChordNode.DeletePreStore",toStore,nil)
 	}
 	return nil
 }
 
-func (n *ChordNode) findSuccessor(keyId *big.Int,reply *string) error {
+func (n *ChordNode) FindSuccessor(keyId *big.Int,reply *string) error {
 	var suc string
-	err:=n.findItsSuccessor("",&suc)
+	err:=n.FindItsSuccessor("",&suc)
 	if err!=nil {
 		return err
 	}
@@ -197,16 +192,16 @@ func (n *ChordNode) findSuccessor(keyId *big.Int,reply *string) error {
 	if err!=nil {
 		return err
 	}
-	return remoteCall(pre,"chordNode.findSuccessor",keyId,reply)
+	return remoteCall(pre,"ChordNode.FindSuccessor",keyId,reply)
 }
 
-func (n *ChordNode) findItsSuccessor(request string,reply *string) error {
+func (n *ChordNode) FindItsSuccessor(_ string,reply *string) error {
 	var suc string
 	for i:=0;i<successorListLen;i++ {
 		n.successorListLock.RLock()
 		suc=n.successorList[i]
 		n.successorListLock.RUnlock()
-		if Ping(suc) {
+		if suc!="" && Ping(suc) {
 			*reply=suc
 			if i>0 {
 				n.successorListLock.Lock()
@@ -227,6 +222,7 @@ func (n *ChordNode) findItsSuccessor(request string,reply *string) error {
 func (n *ChordNode) closestPrecedingFinger(keyId *big.Int) (string,error) {
 	nId:=id(n.addr)
 	n.fingerTableLock.RLock()
+	defer n.fingerTableLock.RUnlock()
 	for i:=M-1;i>=0;i-- {
 		fin:=n.fingerTable[i]
 		if Ping(fin) && isIn(id(fin),nId,keyId,false){
@@ -234,23 +230,22 @@ func (n *ChordNode) closestPrecedingFinger(keyId *big.Int) (string,error) {
 			return fin,nil
 		}
 	}
-	n.fingerTableLock.RUnlock()
 	var suc string
-	err:=n.findItsSuccessor("",&suc)
+	err:=n.FindItsSuccessor("",&suc)
 	if err!=nil {
 		return "",errors.New("not found")
 	}
 	return suc,nil
 }
 
-func (n *ChordNode) getPredecessor(_ string,reply *string) error {
+func (n *ChordNode) GetPredecessor(_ string,reply *string) error {
 	n.predecessorLock.RLock()
 	*reply=n.predecessor
 	n.predecessorLock.RUnlock()
 	return nil
 }
 
-func (n *ChordNode) getStore(_ string,reply *map[string]string) error {
+func (n *ChordNode) GetStore(_ string,reply *map[string]string) error {
 	n.storeLock.RLock()
 	*reply=make(map[string]string)
 	for i,v:=range n.store {
@@ -260,25 +255,20 @@ func (n *ChordNode) getStore(_ string,reply *map[string]string) error {
 	return nil
 }
 
-func (n *ChordNode) stabilize(_ string,_ *string) error {
+func (n *ChordNode) Stabilize(_ string,_ *string) error {
 	var suc string
-	err:=n.findItsSuccessor("",&suc)
+	err:=n.FindItsSuccessor("",&suc)
 	if err!=nil{
-		return err
+		return nil
+		/////////////////
 	}
 	var sucPre string
-	err=remoteCall(suc,"chordNode.getPredecessor","",&sucPre)
-	if err!=nil {
-		return err
-	}
+	_=remoteCall(suc,"ChordNode.GetPredecessor","",&sucPre)
 	if Ping(sucPre) && isIn(id(sucPre),id(n.addr),id(suc),false) {
 		suc=sucPre
 	}
 	var sucList [successorListLen]string
-	err=remoteCall(suc,"chordNode.getSuccessorList","",&sucList)
-	if err!=nil {
-		return err
-	}
+	_=remoteCall(suc,"ChordNode.GetSuccessorList","",&sucList)
 	n.successorListLock.Lock()
 	n.successorList[0]=suc
 	cnt:=1
@@ -289,10 +279,7 @@ func (n *ChordNode) stabilize(_ string,_ *string) error {
 		}
 	}
 	n.successorListLock.Unlock()
-	err=remoteCall(suc,"chordNode.notify",n.addr,nil)
-	if err!=nil {
-		return err
-	}
+	_=remoteCall(suc,"ChordNode.Notify",n.addr,nil)
 	return nil
 }
 
@@ -300,23 +287,19 @@ func (n *ChordNode) ping(addr string) bool {
 	return Ping(addr)
 }
 
-func (n *ChordNode) notify(mayPre string,reply *string) error {
+func (n *ChordNode) Notify(mayPre string,_ *string) error {
 	n.predecessorLock.RLock()
 	pre:=n.predecessor
 	n.predecessorLock.RUnlock()
-	if pre==mayPre {
-		return nil
-	}
-	if pre=="" || isIn(id(mayPre),id(pre),id(n.addr),false) {
+	if pre=="" || pre!=mayPre && isIn(id(mayPre),id(pre),id(n.addr),false) {
 		n.predecessorLock.Lock()
 		n.predecessor=mayPre
 		n.predecessorLock.Unlock()
+		n.mergeStore()
 		n.preStoreLock.Lock()
-		err:=remoteCall(mayPre,"chordNode.getStore","",&n.preStore)
+		_=remoteCall(mayPre,"ChordNode.GetStore","",&n.preStore)
 		n.preStoreLock.Unlock()
-		if err!=nil {
-			return err
-		}
+		//////////////
 	}
 	return nil
 }
@@ -326,18 +309,18 @@ func (n *ChordNode) delete(key string) bool {
 		return false
 	}
 	var suc string
-	err:=n.findSuccessor(id(key),&suc)
+	err:=n.FindSuccessor(id(key),&suc)
 	if err!=nil {
 		return false
 	}
-	err=remoteCall(suc,"chordNode.deleteInStore",key,nil)
+	err=remoteCall(suc,"ChordNode.DeleteInStore",key,nil)
 	if err!=nil {
 		return false
 	}
 	return true
 }
 
-func (n *ChordNode) deleteInStore(key string,_ *string) error {
+func (n *ChordNode) DeleteInStore(key string,_ *string) error {
 	n.storeLock.Lock()
 	_,isExist:=n.store[key]
 	delete(n.store,key)
@@ -346,18 +329,18 @@ func (n *ChordNode) deleteInStore(key string,_ *string) error {
 		return errors.New("delete key in store no exist")
 	}
 	var suc string
-	err:=n.findItsSuccessor("",&suc)
+	err:=n.FindItsSuccessor("",&suc)
 	if err!=nil {
 		return err
 	}
-	err=remoteCall(suc,"chordNode.deleteInPreStore",key,nil)
+	err=remoteCall(suc,"ChordNode.DeleteInPreStore",key,nil)
 	if err!=nil {
 		return err
 	}
 	return nil
 }
 
-func (n *ChordNode) deleteInPreStore(key string,_ *string) error {
+func (n *ChordNode) DeleteInPreStore(key string,_ *string) error {
 	n.preStoreLock.Lock()
 	_,isExist:=n.preStore[key]
 	delete(n.preStore,key)
@@ -371,7 +354,7 @@ func (n *ChordNode) deleteInPreStore(key string,_ *string) error {
 func (n *ChordNode) fixFingers() {
 	needFix:=whereMod(id(n.addr),n.fixNow)
 	var suc string
-	err:=n.findSuccessor(needFix,&suc)
+	err:=n.FindSuccessor(needFix,&suc)
 	if err!=nil {
 		return
 	}
@@ -381,24 +364,54 @@ func (n *ChordNode) fixFingers() {
 	n.fixNow=(n.fixNow+1)%M
 }
 
-// func (n *ChordNode) checkPredecessor (_ string,_ *string) error {
-// 	n.predecessorLock.RLock()
-// 	pre:=n.predecessor
-// 	n.predecessorLock.RUnlock()
-// 	if pre!="" && !Ping(pre) {
-// 		n.predecessorLock.Lock()
-// 		n.predecessor=""
-// 		n.predecessorLock.Unlock()
-// 		///////////////////////
-// 	}
-// }
+func (n *ChordNode) PutIntoPreStore(storeData *map[string]string,_ *string) error {
+	n.preStoreLock.Lock()
+	for i,v := range *storeData {
+		n.preStore[i]=v
+	}
+	n.preStoreLock.Unlock()
+	return nil
+}
+
+func (n *ChordNode) mergeStore() {
+	n.storeLock.Lock()
+	n.preStoreLock.RLock()
+	for i,v:=range n.preStore {
+		n.store[i]=v
+	}
+	n.storeLock.Unlock()
+	n.preStoreLock.RUnlock()
+	var suc string
+	err:=n.FindItsSuccessor("",&suc)
+	if err!=nil {
+		return
+	}
+	if suc!=n.addr {
+		n.preStoreLock.Lock()
+		err=remoteCall(suc,"ChordNode.PutIntoPreStore",&n.preStore,nil)
+		n.preStore=make(map[string]string)
+		n.preStoreLock.Unlock()
+	}
+}
+
+func (n *ChordNode) CheckPredecessor (_ string,_ *string) error {
+	n.predecessorLock.RLock()
+	pre:=n.predecessor
+	n.predecessorLock.RUnlock()
+	if pre!="" && !Ping(pre) {
+		n.predecessorLock.Lock()
+		n.predecessor=""
+		n.predecessorLock.Unlock()
+		n.mergeStore()
+	}
+	return nil
+}
 
 func (n *ChordNode) maintain() {
 	go func() {
-		var emp string
 		for {
 			if n.online {
-				n.stabilize("",&emp)
+				_=n.Stabilize("",nil)
 			}
 			time.Sleep(maintainTime)
 		}
@@ -411,15 +424,14 @@ func (n *ChordNode) maintain() {
 			time.Sleep(maintainTime)
 		}
 	}()
-	// go func() {
-	// 	var emp string
-	// 	for {
-	// 		if n.online {
-	// 			_:=n.checkPredecessor("",&emp)
-	// 		}
-	// 		time.Sleep(maintainTime)
-	// 	}
-	// }()
+	go func() {
+		for {
+			if n.online {
+				_=n.CheckPredecessor("",nil)
+			}
+			time.Sleep(maintainTime)
+		}
+	}()
 }
 
 func (n *ChordNode) clear() {
@@ -433,22 +445,23 @@ func (n *ChordNode) clear() {
 }
 
 func (n *ChordNode) quit() {
-	n.onlineLock.RLock()
 	if !n.online {
-		n.onlineLock.RUnlock()
 		return
 	}
-	n.onlineLock.RUnlock()
 	n.shutDownServer()
 	n.predecessorLock.RLock()
 	pre:=n.predecessor
 	n.predecessorLock.RUnlock()
-	var suc,emp string
-	err:=n.findItsSuccessor("",&suc)
+	var suc string
+	err:=n.FindItsSuccessor("",&suc)
 	if err!=nil {
 		return
 	}
-	err=remoteCall(pre,"chordNode.stabilize","",&emp)
+	err=remoteCall(suc,"ChordNode.CheckPredecessor","",nil)
+	if err!=nil {
+		return
+	}
+	err=remoteCall(pre,"ChordNode.Stabilize","",nil)
 	if err!=nil {
 		return
 	}
@@ -467,33 +480,27 @@ func (n *ChordNode) shutDownServer() {
 }
 
 func (n *ChordNode) forceQuit() {
-	n.onlineLock.RLock()
 	if !n.online {
-		n.onlineLock.RUnlock()
 		return
 	}
-	n.onlineLock.RUnlock()
 	n.shutDownServer()
 	n.clear()
 }
 
-func (n *ChordNode) storeData(dataPair Pair,_ *string) error {
+func (n *ChordNode) StoreData(dataPair Pair,_ *string) error {
 	n.storeLock.Lock()
 	n.store[dataPair.Key]=dataPair.Value
 	n.storeLock.Unlock()
 	var suc string
-	err:=n.findItsSuccessor("",&suc)
+	err:=n.FindItsSuccessor("",&suc)
 	if err!=nil {
 		return err
 	}
-	err=remoteCall(suc,"chordNode.preStoreData",dataPair,nil)
-	if err!=nil {
-		return err
-	}
+	_=remoteCall(suc,"ChordNode.PreStoreData",dataPair,nil)
 	return nil
 }
 
-func (n *ChordNode) preStoreData(dataPair Pair,_ *string) error {
+func (n *ChordNode) PreStoreData(dataPair Pair,_ *string) error {
 	n.preStoreLock.Lock()
 	n.preStore[dataPair.Key]=dataPair.Value
 	n.preStoreLock.Unlock()
@@ -501,19 +508,15 @@ func (n *ChordNode) preStoreData(dataPair Pair,_ *string) error {
 }
 
 func (n *ChordNode) put(key string,value string) bool {
-	n.onlineLock.RLock()
 	if !n.online {
-		n.onlineLock.RUnlock()
 		return false
 	}
-	n.onlineLock.RUnlock()
 	var suc string
-	err:=n.findSuccessor(id(key),&suc)
+	err:=n.FindSuccessor(id(key),&suc)
 	if err!=nil {
 		return false
 	}
-	var dataPair=Pair{key,value}
-	err=remoteCall(suc,"chordNode.storeData",dataPair,nil)
+	err=remoteCall(suc,"ChordNode.StoreData",Pair{Key:key,Value:value},nil)
 	if err!=nil {
 		return false
 	}
@@ -521,31 +524,29 @@ func (n *ChordNode) put(key string,value string) bool {
 }
 
 func (n *ChordNode) get(key string) (bool,string) {
-	n.onlineLock.RLock()
 	if !n.online {
-		n.onlineLock.RUnlock()
 		return false,""
 	}
-	n.onlineLock.RUnlock()
 	var suc string
-	err:=n.findSuccessor(id(key),&suc)
+	err:=n.FindSuccessor(id(key),&suc)
 	if err!=nil {
 		return false,""
 	}
 	var value string
-	err=remoteCall(suc,"chordNode.findValue",key,&value)
+	err=remoteCall(suc,"ChordNode.FindValue",key,&value)
 	if err!=nil {
 		return false,""
 	}
 	return true,value
 }
 
-func (n *ChordNode) findValue(key string,value *string) error {
+func (n *ChordNode) FindValue(key string,value *string) error {
 	var isExist bool
 	n.storeLock.RLock()
 	*value,isExist=n.store[key]
 	n.storeLock.RUnlock()
 	if !isExist {
+		*value=""
 		return errors.New("no found")
 	}
 	return nil

@@ -26,7 +26,7 @@ func (w *ChordWrapper) Quit() {
 }
 
 func (w *ChordWrapper) ForceQuit() {
-	w.node.forceQuit();
+	w.node.forceQuit()
 }
 
 func (w *ChordWrapper) Ping(addr string) bool {

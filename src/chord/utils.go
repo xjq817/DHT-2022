@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/rpc"
 	"time"
-	"fmt"
 )
 
 const (
@@ -46,7 +45,9 @@ func myAccept(server *rpc.Server,listener net.Listener,n *ChordNode) {
 func id(addr string) *big.Int {
 	h:=sha1.New()
 	h.Write([]byte(addr))
-	return (&big.Int{}).SetBytes(h.Sum(nil))
+	val:=new(big.Int)
+	val.SetBytes(h.Sum(nil))
+	return val
 }
 
 func closeClient(client *rpc.Client) {
@@ -54,30 +55,29 @@ func closeClient(client *rpc.Client) {
 }
 
 func Dial(addr string) (*rpc.Client,error) {
-	if addr==""{
+	if addr=="" {
 		return nil,errors.New("dial a null addr")
 	}
 	var client *rpc.Client
-	var err error
 	errChan:=make(chan error)
 	for i:=0;i<5;i++{
 		go func(){
+			var err error
 			client,err=rpc.Dial("tpc",addr)
 			errChan<-err
 		}()
 		select{
-		case err=<-errChan:
+		case err:=<-errChan:
 			if err==nil {
 				return client,nil
 			} else {
 				return nil,err
 			}
 		case <-time.After(dialTime):
-			err=errors.New(fmt.Sprintln("dail a time",addr))
+			_=errors.New("dial more")
 		}
 	}
-	err=errors.New(fmt.Sprintln("dail TLE",addr))
-	return nil,err
+	return nil,errors.New("dail TLE")
 }
 
 func remoteCall(addr string,funcName string,request interface{},reply interface{}) error {
@@ -102,24 +102,24 @@ func Ping(addr string) bool {
 	if addr=="" {
 		return false
 	}
-	var client *rpc.Client
-	var err error
 	errChan:=make(chan error)
 	for i:=0;i<5;i++{
 		go func(){
-			client,err=rpc.Dial("tpc",addr)
+			client,err:=rpc.Dial("tpc",addr)
+			if err==nil {
+				_=client.Close()
+			}
 			errChan<-err
 		}()
 		select{
-		case <-errChan:
+		case err:=<-errChan:
 			if err==nil{
-				_ = client.Close()
 				return true
 			} else {
 				return false
 			}
 		case <-time.After(pingTime):
-			err=errors.New(fmt.Sprintln("ping a time",addr))
+			_=errors.New("ping more")
 		}
 	}
 	return false
