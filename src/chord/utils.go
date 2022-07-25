@@ -27,14 +27,14 @@ type Pair struct {
 	Value string
 }
 
-func myAccept(server *rpc.Server,listener net.Listener,n *ChordNode) {
+func MyAccept(server *rpc.Server,listener net.Listener,n *ChordNode) {
 	for {
 		conn,err:=listener.Accept()
 		select {
 		case <-n.quitSignal:
 			return
 		default:
-			if err!=nil{
+			if err!=nil {
 				return
 			}
 			go server.ServeConn(conn)
@@ -45,13 +45,7 @@ func myAccept(server *rpc.Server,listener net.Listener,n *ChordNode) {
 func id(addr string) *big.Int {
 	h:=sha1.New()
 	h.Write([]byte(addr))
-	val:=new(big.Int)
-	val.SetBytes(h.Sum(nil))
-	return val
-}
-
-func closeClient(client *rpc.Client) {
-	_=client.Close()
+	return (&big.Int{}).SetBytes(h.Sum(nil))
 }
 
 func Dial(addr string) (*rpc.Client,error) {
@@ -59,43 +53,40 @@ func Dial(addr string) (*rpc.Client,error) {
 		return nil,errors.New("dial a null addr")
 	}
 	var client *rpc.Client
+	var err error
 	errChan:=make(chan error)
 	for i:=0;i<5;i++{
 		go func(){
-			var err error
-			client,err=rpc.Dial("tpc",addr)
+			client,err=rpc.Dial("tcp",addr)
 			errChan<-err
 		}()
 		select{
-		case err:=<-errChan:
+		case <-errChan:
 			if err==nil {
 				return client,nil
 			} else {
 				return nil,err
 			}
 		case <-time.After(dialTime):
-			_=errors.New("dial more")
 		}
 	}
-	return nil,errors.New("dail TLE")
+	return nil,err
 }
 
-func remoteCall(addr string,funcName string,request interface{},reply interface{}) error {
+func RemoteCall(addr string,funcName string,request interface{},reply interface{}) error {
 	client,err:=Dial(addr)
-	if err!=nil{
+	if err!=nil {
 		return err
 	}
-	defer closeClient(client)
 	err=client.Call(funcName,request,reply)
+	_=client.Close()
 	return err
 }
 
-func pow2(i int) *big.Int {
-	return new(big.Int).Exp(two,big.NewInt(int64(i)),nil)
-}
-
 func whereMod(nId *big.Int,i int) *big.Int {
-	return new(big.Int).Mod(new(big.Int).Add(nId,pow2(i)),mod)
+	u:=new(big.Int).Exp(two,big.NewInt(int64(i)),nil)
+	u=new(big.Int).Add(nId,u)
+	return new(big.Int).Mod(u,mod)
 }
 
 func Ping(addr string) bool {
@@ -105,7 +96,7 @@ func Ping(addr string) bool {
 	errChan:=make(chan error)
 	for i:=0;i<5;i++{
 		go func(){
-			client,err:=rpc.Dial("tpc",addr)
+			client,err:=rpc.Dial("tcp",addr)
 			if err==nil {
 				_=client.Close()
 			}
@@ -119,7 +110,6 @@ func Ping(addr string) bool {
 				return false
 			}
 		case <-time.After(pingTime):
-			_=errors.New("ping more")
 		}
 	}
 	return false

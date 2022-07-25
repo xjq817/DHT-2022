@@ -1,11 +1,11 @@
 package chord
 
-type ChordWrapper struct{
+type ChordWrapper struct {
 	node *ChordNode
 }
 
 func (w *ChordWrapper) Initialize(addr string) {
-	w.node=new(ChordNode)
+	w.node = new(ChordNode)
 	w.node.initialize(addr)
 }
 
@@ -34,7 +34,7 @@ func (w *ChordWrapper) Ping(addr string) bool {
 }
 
 func (w *ChordWrapper) Put(key string, value string) bool {
-	return w.node.put(key,value)
+	return w.node.put(key, value)
 }
 
 func (w *ChordWrapper) Get(key string) (bool, string) {
