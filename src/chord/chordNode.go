@@ -374,7 +374,7 @@ func (n *ChordNode) CheckPredecessor (_ string,_ *string) error {
 		var suc string
 		err:=n.FindItsSuccessor("",&suc)
 		if err!=nil {
-			return
+			return nil
 		}
 		if suc!=n.addr {
 			n.preStoreLock.Lock()
