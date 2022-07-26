@@ -11,7 +11,7 @@ package main
 
 func NewNode(port int) dhtNode {
 	// Todo: create a node and then return it.
-	var w chord.ChordWrapper
+	var w kademlia.KadWrapper
 	w.Initialize(GetLocalAddress()+":"+strconv.Itoa(port))
 	return &w
 }
