@@ -2,7 +2,6 @@ package kademlia
 
 import(
 	"errors"
-	"math/big"
 	"net"
 	"net/rpc"
 	"sync"
@@ -10,29 +9,78 @@ import(
 )
 
 type KadNode struct {
-	addr string
-	online bool
-	onlineLock sync.RWMutex
-	store map[string]string
-	storeLock sync.RWMutex
-	kbucket [M]Bucket
-	kbucketLock sync.RWMutex
-	server *rpc.Server
-	listener net.Listener
-	quitSignal chan bool
+	addr           string
+	online         bool
+	onlineLock     sync.RWMutex
+	store          map[string]string
+	republishTime  map[string]time.Time
+	expireTime     map[string]time.Time
+	dataLock       sync.RWMutex
+	kbucket        [M]Bucket
+	kbucketLock    sync.RWMutex
+	server         *rpc.Server
+	listener       net.Listener
+	quitSignal     chan bool
 }
 
 func (n *KadNode) clear() {
-	n.storeLock.Lock()
+	n.dataLock.Lock()
 	n.store=make(map[string]string)
-	n.storeLock.Unlock()
+	n.republishTime=make(map[string]time.Time)
+	n.expireTime=make(map[string]time.Time)
+	n.dataLock.Unlock()
 	n.quitSignal=make(chan bool,2)
+}
+
+func (n *KadNode) copy() map[string]string {
+	tmp:=make(map[string]string)
+	for key,value:=range n.store {
+		tmp[key]=value
+	}
+	return tmp
+}
+
+func (n *KadNode) republish() []string {
+	var list []string
+	for key,tim:=range n.republishTime {
+		if time.Now().After(tim) {
+			list=append(list,key)
+		}
+	}
+	return list
+}
+
+func (n *KadNode) expire() {
+	n.dataLock.Lock()
+	var list []string
+	for key,tim:=range n.expireTime {
+		if time.Now().After(tim) {
+			list=append(list,key)
+		}
+	}
+	for _,key:=range list {
+		delete(n.store,key)
+		delete(n.republishTime,key)
+		delete(n.expireTime,key)
+	}
+	n.dataLock.Unlock()
 }
 
 func (n *KadNode) maintain() {
 	for {
 		if n.online {
-			
+			n.kbucketLock.Lock()
+			for i:=0;i<M;i++ {
+				n.kbucket[i].renew()
+			}
+			n.dataLock.Lock()
+			storeDate:=n.copy()
+			republishList:=n.republish()
+			n.dataLock.Unlock()
+			for _,key:=range republishList {
+				n.put(key,storeDate[key])
+			}
+			n.expire()
 		}
 		time.Sleep(maintainTime)
 	}
@@ -65,7 +113,7 @@ func (n *KadNode) create() {
 
 func (n *KadNode) kbucketUpdate(addr string) {
 	n.kbucketLock.Lock()
-	kbucket[cpl(id(n.addr),addr)].update(addr)
+	n.kbucket[cpl(id(n.addr),id(addr))].update(addr)
 	n.kbucketLock.Unlock()
 }
 
@@ -80,18 +128,18 @@ func (n *KadNode) join(addr string) bool {
 		return false
 	}
 	for i:=0;i<list.size;i++ {
-		n.kbucketUpdate(list[i])
+		n.kbucketUpdate(list.arr[i])
 	}
 	list=n.lookUp(n.addr)
 	for i:=0;i<list.size;i++ {
-		n.kbucketUpdate(list[i])
+		n.kbucketUpdate(list.arr[i])
 		var tmp ClosestList
-		err=RemoteCall(list[i],"Kad.FindNode",n.addr,&tmp)
+		err=RemoteCall(list.arr[i],"Kad.FindNode",n.addr,&tmp)
 		if err!=nil {
 			continue
 		}
 		for j:=0;j<tmp.size;j++ {
-			n.kbucketUpdate(tmp[j])
+			n.kbucketUpdate(tmp.arr[j])
 		}
 	}
 	n.onlineLock.Lock()
@@ -131,7 +179,7 @@ func (n *KadNode) put(key string,value string) bool {
 	list:=n.lookUp(key)
 	list.insert(n.addr)
 	for i:=0;i<list.size;i++ {
-		_=RemoteCall(list.arr[i],"KadNode.Store",dataPair{Key:key,Value:value},nil)
+		_=RemoteCall(list.arr[i],"KadNode.Store",DataPair{Key:key,Value:value},nil)
 	}
 	return true
 }
@@ -148,17 +196,18 @@ func (n *KadNode) get(key string) (bool,string) {
 	isFind:=make(map[string]bool)
 	isFind[n.addr]=true
 	list:=getPair.List
+	flag:=true
 	for flag {
 		flag=false
 		var tmp ClosestList
-		tmp.addr=addr
+		tmp.addr=key
 		var delList []string
 		for i:=0;i<list.size;i++ {
 			if isFind[list.arr[i]]==true {
 				continue
 			}
 			isFind[list.arr[i]]=true
-			var getPairI ClosestList
+			var getPairI FindValuePair
 			err:=RemoteCall(list.arr[i],"KadNode.FindValue",key,&getPairI)
 			if err!=nil {
 				delList=append(delList,list.arr[i])
@@ -167,8 +216,8 @@ func (n *KadNode) get(key string) (bool,string) {
 			if getPairI.Value!="" {
 				return true,getPairI.Value
 			}
-			for j:=0;j<listI.size;j++ {
-				tmp.insert(listI.arr[i])
+			for j:=0;j<getPairI.List.size;j++ {
+				tmp.insert(getPairI.List.arr[j])
 			}
 		}
 		for _,value:=range delList {
@@ -183,12 +232,17 @@ func (n *KadNode) get(key string) (bool,string) {
 	return false,""
 }
 
-func (n *KadNode) delete(key string) bool {}
+func (n *KadNode) delete(key string) bool {
+	return true
+}
 
 func (n *KadNode) Store(dataPair DataPair,_ *string) error {
-	n.storeLock.Lock()
+	n.dataLock.Lock()
 	n.store[dataPair.Key]=dataPair.Value
-	n.storeLock.Unlock()
+	n.republishTime[dataPair.Key]=time.Now().Add(RepublishTime)
+	n.expireTime[dataPair.Key]=time.Now().Add(ExpireTime)
+	n.dataLock.Unlock()
+	return nil
 }
 
 func (n *KadNode) FindNode(addr string,list *ClosestList) error {
@@ -209,17 +263,17 @@ func (n *KadNode) FindNode(addr string,list *ClosestList) error {
 }
 
 func (n *KadNode) FindValue(addr string,reply *FindValuePair) error {
+	(*reply).List.addr=addr
 	if !n.online {
 		return errors.New("FindValue no online")
 	}
-	n.storeLock.RLock()
-	defer n.storeLock.RUnlock()
+	n.dataLock.RLock()
+	defer n.dataLock.RUnlock()
 	value,isExist:=n.store[addr]
 	if isExist {
 		(*reply).Value=value
 		return nil
 	}
-	(*reply).List.addr=addr
 	n.kbucketLock.RLock()
 	for i:=0;i<M;i++{
 		for j:=0;j<n.kbucket[i].size;j++{

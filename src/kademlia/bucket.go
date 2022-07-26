@@ -9,6 +9,18 @@ type Bucket struct {
 	arr [K]string
 }
 
+func (n *Bucket) renew() {
+	for i:=0;i<n.size;i++ {
+		if !Ping(n.arr[i]) {
+			for j:=i+1;j<n.size;j++ {
+				n.arr[j-1]=n.arr[j]
+			}
+			n.size--
+			return
+		}
+	}
+}
+
 func (n *Bucket) update(addr string) {
 	if addr=="" {
 		return

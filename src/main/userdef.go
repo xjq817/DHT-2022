@@ -5,7 +5,7 @@ package main
  */
 
  import(
-	"chord"
+	"kademlia"
 	"strconv"
  )
 

@@ -23,22 +23,22 @@ func (n *ClosestList) insert(addr string) bool {
 	newDis:=dis(id(addr),nId)
 	if (n.size<K){
 		for i:=0;i<=n.size;i++ {
-			if i==n.size || newDis.Cmp(dis(id(arr[i]),nId))<0 {
+			if i==n.size || newDis.Cmp(dis(id(n.arr[i]),nId))<0 {
 				for j:=n.size;j>i;j-- {
-					arr[j]=arr[j-1]
+					n.arr[j]=n.arr[j-1]
 				}
-				arr[i]=addr
+				n.arr[i]=addr
 				n.size++
 				return true
 			}
 		}
 	}
 	for i:=0;i<K;i++ {
-		if newDis.Cmp(dis(id(arr[i]),nId))<0 {
+		if newDis.Cmp(dis(id(n.arr[i]),nId))<0 {
 			for j:=K-1;j>i;j-- {
-				arr[j]=arr[j-1]
+				n.arr[j]=n.arr[j-1]
 			}
-			arr[i]=addr
+			n.arr[i]=addr
 			return true
 		}
 	}

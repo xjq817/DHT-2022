@@ -10,18 +10,21 @@ import (
 )
 
 const (
-	M=160
-	K=20
-	alpha=3
-	dialTime=500*time.Millisecond
-	pingTime=500*time.Millisecond
+	M             = 160
+	K             = 20
+	alpha         = 3
+	dialTime      = 500*time.Millisecond
+	pingTime      = 500*time.Millisecond
+	RepublishTime = 120*time.Second
+	ExpireTime    = 960*time.Second
+	maintainTime  = 200*time.Millisecond
 )
 
 var (
 	
 )
 
-type DatePair struct {
+type DataPair struct {
 	Key   string
 	Value string
 }
