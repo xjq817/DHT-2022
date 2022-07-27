@@ -33,20 +33,24 @@ func (n *KadNode) clear() {
 }
 
 func (n *KadNode) copy() map[string]string {
+	n.dataLock.RLock()
 	tmp := make(map[string]string)
 	for key, value := range n.store {
 		tmp[key] = value
 	}
+	n.dataLock.RUnlock()
 	return tmp
 }
 
 func (n *KadNode) republish() []string {
 	var list []string
+	n.dataLock.RLock()
 	for key, tim := range n.republishTime {
 		if time.Now().After(tim) {
 			list = append(list, key)
 		}
 	}
+	n.dataLock.RUnlock()
 	return list
 }
 
@@ -74,10 +78,8 @@ func (n *KadNode) maintain() {
 				n.kbucket[i].renew()
 			}
 			n.kbucketLock.Unlock()
-			n.dataLock.Lock()
 			storeDate := n.copy()
 			republishList := n.republish()
-			n.dataLock.Unlock()
 			for _, key := range republishList {
 				n.put(key, storeDate[key])
 			}
@@ -246,7 +248,7 @@ func (n *KadNode) Store(dataPair DataPair, _ *string) error {
 	return nil
 }
 
-func (n *KadNode) FindNode(addr string, list *ClosestList) (ret error) {
+func (n *KadNode) FindNode(addr string, list *ClosestList) error {
 	list.Addr = addr
 	if !n.online {
 		return errors.New("FindNode no online")
