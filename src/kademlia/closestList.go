@@ -1,44 +1,40 @@
 package kademlia
 
-import(
-
-)
-
 type ClosestList struct {
-	size int
-	addr string
-	arr [K]string
+	Size int
+	Addr string
+	Arr  [K]string
 }
 
 func (n *ClosestList) insert(addr string) bool {
-	if addr=="" {
+	if addr == "" {
 		return false
 	}
-	for i:=0;i<n.size;i++ {
-		if n.arr[i]==addr {
+	for i := 0; i < n.Size; i++ {
+		if n.Arr[i] == addr {
 			return false
 		}
 	}
-	nId:=id(n.addr)
-	newDis:=dis(id(addr),nId)
-	if (n.size<K){
-		for i:=0;i<=n.size;i++ {
-			if i==n.size || newDis.Cmp(dis(id(n.arr[i]),nId))<0 {
-				for j:=n.size;j>i;j-- {
-					n.arr[j]=n.arr[j-1]
+	nId := id(n.Addr)
+	newDis := dis(id(addr), nId)
+	if n.Size < K {
+		for i := 0; i <= n.Size; i++ {
+			if i == n.Size || newDis.Cmp(dis(id(n.Arr[i]), nId)) < 0 {
+				for j := n.Size; j > i; j-- {
+					n.Arr[j] = n.Arr[j-1]
 				}
-				n.arr[i]=addr
-				n.size++
+				n.Arr[i] = addr
+				n.Size++
 				return true
 			}
 		}
 	}
-	for i:=0;i<K;i++ {
-		if newDis.Cmp(dis(id(n.arr[i]),nId))<0 {
-			for j:=K-1;j>i;j-- {
-				n.arr[j]=n.arr[j-1]
+	for i := 0; i < K; i++ {
+		if newDis.Cmp(dis(id(n.Arr[i]), nId)) < 0 {
+			for j := K - 1; j > i; j-- {
+				n.Arr[j] = n.Arr[j-1]
 			}
-			n.arr[i]=addr
+			n.Arr[i] = addr
 			return true
 		}
 	}
@@ -46,12 +42,12 @@ func (n *ClosestList) insert(addr string) bool {
 }
 
 func (n *ClosestList) remove(addr string) bool {
-	for i:=0;i<n.size;i++ {
-		if n.arr[i]==addr {
-			for j:=i;j<n.size;j++ {
-				n.arr[j]=n.arr[j+1]
+	for i := 0; i < n.Size; i++ {
+		if n.Arr[i] == addr {
+			for j := i; j < n.Size; j++ {
+				n.Arr[j] = n.Arr[j+1]
 			}
-			n.size--
+			n.Size--
 			return true
 		}
 	}

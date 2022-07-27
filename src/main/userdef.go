@@ -4,15 +4,15 @@ package main
  * a struct which implements the interface "dhtNode".
  */
 
- import(
+import (
 	"kademlia"
 	"strconv"
- )
+)
 
 func NewNode(port int) dhtNode {
 	// Todo: create a node and then return it.
 	var w kademlia.KadWrapper
-	w.Initialize(GetLocalAddress()+":"+strconv.Itoa(port))
+	w.Initialize(GetLocalAddress() + ":" + strconv.Itoa(port))
 	return &w
 }
 

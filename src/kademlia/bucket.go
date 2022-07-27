@@ -1,53 +1,50 @@
 package kademlia
 
-import(
-
-)
-
 type Bucket struct {
-	size int
-	arr [K]string
+	Size int
+	Arr  [K]string
 }
 
 func (n *Bucket) renew() {
-	for i:=0;i<n.size;i++ {
-		if !Ping(n.arr[i]) {
-			for j:=i+1;j<n.size;j++ {
-				n.arr[j-1]=n.arr[j]
+	for i := 0; i < n.Size; i++ {
+		if !Ping(n.Arr[i]) {
+			for j := i + 1; j < n.Size; j++ {
+				n.Arr[j-1] = n.Arr[j]
 			}
-			n.size--
+			n.Size--
 			return
 		}
 	}
 }
 
 func (n *Bucket) update(addr string) {
-	if addr=="" {
+	if addr == "" {
 		return
 	}
-	pos:=-1
-	for i:=0;i<n.size;i++ {
-		if n.arr[i]==addr {
-			pos=i;break;
+	pos := -1
+	for i := 0; i < n.Size; i++ {
+		if n.Arr[i] == addr {
+			pos = i
+			break
 		}
 	}
-	if pos!=-1 {
-		for i:=pos+1;i<n.size;i++ {
-			n.arr[i-1]=n.arr[i]
+	if pos != -1 {
+		for i := pos + 1; i < n.Size; i++ {
+			n.Arr[i-1] = n.Arr[i]
 		}
-		n.arr[n.size-1]=addr
+		n.Arr[n.Size-1] = addr
 		return
 	}
-	if n.size<K {
-		n.arr[n.size]=addr
-		n.size++;
+	if n.Size < K {
+		n.Arr[n.Size] = addr
+		n.Size++
 		return
 	}
-	if Ping(n.arr[0]) {
-		addr=n.arr[0]
+	if Ping(n.Arr[0]) {
+		addr = n.Arr[0]
 	}
-	for i:=1;i<K;i++ {
-		n.arr[i-1]=n.arr[i]
+	for i := 1; i < K; i++ {
+		n.Arr[i-1] = n.Arr[i]
 	}
-	n.arr[K-1]=addr
+	n.Arr[K-1] = addr
 }

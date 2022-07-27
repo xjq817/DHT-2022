@@ -5,7 +5,7 @@ type KadWrapper struct {
 }
 
 func (w *KadWrapper) Initialize(addr string) {
-	w.node=new(KadNode)
+	w.node = new(KadNode)
 	w.node.initialize(addr)
 }
 
