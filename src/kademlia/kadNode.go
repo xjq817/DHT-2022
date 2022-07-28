@@ -55,13 +55,15 @@ func (n *KadNode) republish() []string {
 }
 
 func (n *KadNode) expire() {
-	n.dataLock.Lock()
 	var list []string
+	n.dataLock.RLock()
 	for key, tim := range n.expireTime {
 		if time.Now().After(tim) {
 			list = append(list, key)
 		}
 	}
+	n.dataLock.RUnlock()
+	n.dataLock.Lock()
 	for _, key := range list {
 		delete(n.store, key)
 		delete(n.republishTime, key)
@@ -128,6 +130,7 @@ func (n *KadNode) join(addr string) bool {
 	var list ClosestList
 	err := RemoteCall(addr, "KadNode.FindNode", n.addr, &list)
 	if err != nil {
+		logErrorFunctionCall(n.addr, "KadNode.join", "KadNode.FindNode", err)
 		return false
 	}
 	for i := 0; i < list.Size; i++ {
@@ -139,6 +142,7 @@ func (n *KadNode) join(addr string) bool {
 		var tmp ClosestList
 		err = RemoteCall(list.Arr[i], "KadNode.FindNode", n.addr, &tmp)
 		if err != nil {
+			logErrorFunctionCall(n.addr, "KadNode.join", "KadNode.FindNode", err)
 			continue
 		}
 		for j := 0; j < tmp.Size; j++ {
@@ -213,6 +217,7 @@ func (n *KadNode) get(key string) (bool, string) {
 			var getPairI FindValuePair
 			err := RemoteCall(list.Arr[i], "KadNode.FindValue", key, &getPairI)
 			if err != nil {
+				logErrorFunctionCall(n.addr, "KadNode.get", "KadNode.FindValue", err)
 				delList = append(delList, list.Arr[i])
 				continue
 			}
@@ -230,6 +235,14 @@ func (n *KadNode) get(key string) (bool, string) {
 			if list.insert(tmp.Arr[i]) {
 				flag = true
 			}
+		}
+	}
+	list = n.lookUp(key)
+	for i := 0; i < list.Size; i++ {
+		var getPairI FindValuePair
+		_ = RemoteCall(list.Arr[i], "Kad.FindValue", key, &getPairI)
+		if getPairI.Value != "" {
+			return true, getPairI.Value
 		}
 	}
 	return false, ""
@@ -266,7 +279,7 @@ func (n *KadNode) FindNode(addr string, list *ClosestList) error {
 }
 
 func (n *KadNode) FindValue(addr string, reply *FindValuePair) error {
-	(*reply).List.Addr = addr
+	reply.List.Addr = addr
 	if !n.online {
 		return errors.New("FindValue no online")
 	}
@@ -274,14 +287,15 @@ func (n *KadNode) FindValue(addr string, reply *FindValuePair) error {
 	defer n.dataLock.RUnlock()
 	value, isExist := n.store[addr]
 	if isExist {
-		(*reply).Value = value
+		reply.Value = value
 		return nil
 	}
+	reply.Value = ""
 	n.kbucketLock.RLock()
 	for i := 0; i < M; i++ {
 		for j := 0; j < n.kbucket[i].Size; j++ {
 			if Ping(n.kbucket[i].Arr[j]) {
-				(*reply).List.insert(n.kbucket[i].Arr[j])
+				reply.List.insert(n.kbucket[i].Arr[j])
 			}
 		}
 	}
@@ -291,6 +305,7 @@ func (n *KadNode) FindValue(addr string, reply *FindValuePair) error {
 
 func (n *KadNode) lookUp(addr string) ClosestList {
 	var list ClosestList
+	list.Size = 0
 	if !n.online {
 		return list
 	}
@@ -307,10 +322,12 @@ func (n *KadNode) lookUp(addr string) ClosestList {
 			if isFind[list.Arr[i]] {
 				continue
 			}
+			n.kbucketUpdate(list.Arr[i])
 			isFind[list.Arr[i]] = true
 			var listI ClosestList
 			err := RemoteCall(list.Arr[i], "KadNode.FindNode", addr, &listI)
 			if err != nil {
+				logErrorFunctionCall(n.addr, "KadNode.lookUp", "KadNode.FindNode", err)
 				delList = append(delList, list.Arr[i])
 				continue
 			}

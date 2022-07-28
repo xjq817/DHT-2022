@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/rpc"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -15,12 +17,10 @@ const (
 	alpha         = 3
 	dialTime      = 500 * time.Millisecond
 	pingTime      = 500 * time.Millisecond
+	maintainTime  = 200 * time.Millisecond
 	RepublishTime = 120 * time.Second
 	ExpireTime    = 960 * time.Second
-	maintainTime  = 200 * time.Millisecond
 )
-
-var ()
 
 type DataPair struct {
 	Key   string
@@ -30,6 +30,10 @@ type DataPair struct {
 type FindValuePair struct {
 	List  ClosestList
 	Value string
+}
+
+func logErrorFunctionCall(addr, fromFunc, toFunc string, err error) {
+	log.Errorf("[Addr:%v] In call from [%v] to [%v] failed, error message: [%v].", addr, fromFunc, toFunc, err)
 }
 
 func MyAccept(server *rpc.Server, listener net.Listener, n *KadNode) {
