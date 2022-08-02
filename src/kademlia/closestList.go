@@ -7,7 +7,7 @@ type ClosestList struct {
 }
 
 func (n *ClosestList) insert(addr string) bool {
-	if addr == "" {
+	if !Ping(addr) {
 		return false
 	}
 	for i := 0; i < n.Size; i++ {
@@ -44,8 +44,8 @@ func (n *ClosestList) insert(addr string) bool {
 func (n *ClosestList) remove(addr string) bool {
 	for i := 0; i < n.Size; i++ {
 		if n.Arr[i] == addr {
-			for j := i; j < n.Size-1; j++ {
-				n.Arr[j] = n.Arr[j+1]
+			for j := i + 1; j < n.Size; j++ {
+				n.Arr[j-1] = n.Arr[j]
 			}
 			n.Size--
 			return true
