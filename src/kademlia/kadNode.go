@@ -351,28 +351,73 @@ func (n *KadNode) lookUp(addr string) (list ClosestList) {
 	flag := true
 	isFind := make(map[string]bool)
 	isFind[n.addr] = true
+	var isFindLock sync.RWMutex
 	for flag {
 		flag = false
 		var tmp ClosestList
+		var tmpLock sync.RWMutex
 		tmp.Addr = addr
 		var delList []string
+		var delListLock sync.RWMutex
+		listChan := make(chan ConcurrencyType, alpha)
+		cnt := -1
+		var aLock [alpha]sync.RWMutex
+		inRunning := 0
 		for i := 0; i < list.Size; i++ {
+			isFindLock.RLock()
 			if isFind[list.Arr[i]] {
+				isFindLock.RUnlock()
 				continue
 			}
-			n.kbucketUpdate(list.Arr[i])
-			isFind[list.Arr[i]] = true
-			var listI ClosestList
-			err := RemoteCall(list.Arr[i], "KadNode.FindNode", DataPair{Key: addr, Value: n.addr}, &listI)
-			if err != nil {
-				logErrorFunctionCall(n.addr, "KadNode.lookUp", "KadNode.FindNode", err)
-				delList = append(delList, list.Arr[i])
-				continue
-			}
-			for j := 0; j < listI.Size; j++ {
-				tmp.insert(listI.Arr[j])
+			isFindLock.RUnlock()
+			cnt = (cnt + 1) % alpha
+			go func(nowaddr string, nowcnt int) {
+				inRunning++
+				aLock[nowcnt].Lock()
+				n.kbucketUpdate(nowaddr)
+				isFindLock.Lock()
+				isFind[nowaddr] = true
+				isFindLock.Unlock()
+				var listI ClosestList
+				err := RemoteCall(nowaddr, "KadNode.FindNode", DataPair{Key: addr, Value: n.addr}, &listI)
+				if err != nil {
+					logErrorFunctionCall(n.addr, "KadNode.lookUp", "KadNode.FindNode", err)
+					delListLock.Lock()
+					delList = append(delList, nowaddr)
+					delListLock.Unlock()
+					aLock[nowcnt].Unlock()
+					inRunning--
+				} else {
+					listChan <- ConcurrencyType{List: listI, Cnt: nowcnt}
+				}
+			}(list.Arr[i], cnt)
+			// n.kbucketUpdate(list.Arr[i])
+			// isFind[list.Arr[i]] = true
+			// var listI ClosestList
+			// err := RemoteCall(list.Arr[i], "KadNode.FindNode", DataPair{Key: addr, Value: n.addr}, &listI)
+			// if err != nil {
+			// 	logErrorFunctionCall(n.addr, "KadNode.lookUp", "KadNode.FindNode", err)
+			// 	delList = append(delList, list.Arr[i])
+			// 	continue
+			// }
+			// for j := 0; j < listI.Size; j++ {
+			// 	tmp.insert(listI.Arr[j])
+			// }
+		}
+		for inRunning > 0 {
+			select {
+			case value := <-listChan:
+				tmpLock.Lock()
+				for j := 0; j < value.List.Size; j++ {
+					tmp.insert(value.List.Arr[j])
+				}
+				tmpLock.Unlock()
+				aLock[value.Cnt].Unlock()
+				inRunning--
+			case <-time.After(durationTime):
 			}
 		}
+
 		for _, value := range delList {
 			list.remove(value)
 		}

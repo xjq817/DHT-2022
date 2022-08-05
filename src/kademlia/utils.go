@@ -17,6 +17,7 @@ const (
 	alpha         = 3
 	dialTime      = 500 * time.Millisecond
 	pingTime      = 500 * time.Millisecond
+	durationTime  = 500 * time.Millisecond
 	maintainTime  = 2 * time.Second
 	RepublishTime = 120 * time.Second
 	ExpireTime    = 960 * time.Second
@@ -35,6 +36,11 @@ type FindValuePair struct {
 type StorePair struct {
 	Value DataPair
 	Addr  string
+}
+
+type ConcurrencyType struct {
+	List ClosestList
+	Cnt  int
 }
 
 func logErrorFunctionCall(addr, fromFunc, toFunc string, err error) {

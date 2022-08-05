@@ -39,7 +39,7 @@ const (
 	forceQuitAfterJoinSleepTime         = 10 * time.Second
 	forceQuitFQSleepTime                = 500 * time.Millisecond
 
-	QASNodeSize           int     = 50
+	QASNodeSize           int     = 60
 	QASPutSize            int     = 500
 	QASMaxFailRate        float64 = 0.01
 	QASGetSize            int     = 20
