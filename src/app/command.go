@@ -47,7 +47,7 @@ func RunCLI() {
 		}
 		if op == "upload" {
 			self.Upload(element1, element2)
-			green.Println("Upload succeed >o<")
+			// green.Println("Upload succeed >o<")
 			continue
 		}
 		if op == "download" {
@@ -56,12 +56,12 @@ func RunCLI() {
 			} else if element1 == "-m" {
 				self.DownLoadByMagnet(element2, element3)
 			}
-			green.Println("Download succeed >u<")
+			// green.Println("Download succeed >u<")
 			continue
 		}
 		if op == "quit" {
 			self.node.Quit()
-			green.Println("Quit succeed >^<")
+			green.Println("Quit succeed >o<")
 			continue
 		}
 		if op == "exit" {

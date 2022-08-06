@@ -14,58 +14,57 @@ type Client struct {
 	node dhtNode
 }
 
-func (c *Client) Init(port int) {
-	c.node = NewNode(port)
-	c.node.Run()
+func (n *Client) Init(port int) {
+	n.node = NewNode(port)
+	n.node.Run()
 	yellow.Printf("Client start running at %s:%d\n", GetLocalAddress(), port)
 }
 
-func (c *Client) DownLoadByMagnet(magnet string, savePath string) {
-	ok, torrentStr := c.node.Get(magnet)
+func (n *Client) DownLoadByMagnet(magnet string, savePath string) {
+	ok, torrentString := n.node.Get(magnet)
 	if ok {
-		reader := bytes.NewBufferString(torrentStr)
+		reader := bytes.NewBufferString(torrentString)
 		torrent := bencodeTorrent{}
 		err := bencode.Unmarshal(reader, &torrent)
 		if err != nil {
-			red.Printf("[fail] Unmarshal torrent error: %v\n", err)
+			red.Printf("Unmarshal torrent error: %v\n", err)
 		} else {
 			torrent.Save("tmp.torrent")
-			green.Println("[success] Save torrent file to tmp.torrent.")
+			green.Println("Save torrent file to tmp.torrent successfully")
 		}
 	} else {
-		red.Println("[fail] Cannot find torrent of given magnet URL.")
+		red.Println("Failed to find torrent of given magnet URL")
 	}
-	c.DownLoadByTorrent("tmp.torrent", savePath)
+	n.DownLoadByTorrent("tmp.torrent", savePath)
 }
 
-func (c *Client) DownLoadByTorrent(torrentPath string, savePath string) {
-	fileIO, err := os.Create(savePath)
+func (n *Client) DownLoadByTorrent(torrentPath string, savePath string) {
+	file, err := os.Create(savePath)
 	if err != nil {
-		red.Printf("[fail] Create file %s error: %v.\n", savePath, err)
+		red.Printf("Create file %s error: %v\n", savePath, err)
 		return
 	}
 	torrent, err := Open(torrentPath)
 	if err != nil {
-		red.Printf("[fail] Failed to open torrent in path %s, error: %v.\n", torrentPath, err.Error())
+		red.Printf("Failed to open torrent in path %s, error: %v\n", torrentPath, err.Error())
 		return
 	}
 	key := torrent.makeKeyPackage()
-	yellow.Printf("File name: %s, size: %v bytes, piece num: %v.\n", torrent.Info.Name, torrent.Info.Length, key.size)
-	fileName := torrent.Info.Name
+	green.Printf("File name: %s, size: %v bytes, piece num: %v\n", torrent.Info.Name, torrent.Info.Length, key.size)
 
-	ok, data := c.DownLoad(&key)
+	ok, data := n.DownLoad(&key)
 	if ok {
-		fileIO.Write(data)
-		green.Printf("[success] Download %s to %s finished.", fileName, savePath)
+		file.Write(data)
+		green.Printf("Download %s to %s successfully\n", torrent.Info.Name, savePath)
 	} else {
-		red.Println("[fail] Download failed.")
+		red.Println("Download failed.")
 	}
 }
 
-func (c *Client) Upload(filePath, torrentPath string) {
-	yellow.Printf("Start uploading file %s ...\n", filePath)
+func (n *Client) Upload(filePath, torrentPath string) {
+	yellow.Printf("Start uploading file %s\n", filePath)
 	dataPackage, length := makeDataPackage(filePath)
-	green.Println("[success] Data packaged, piece number: ", dataPackage.size)
+	cyan.Println("Data packaged, piece number: ", dataPackage.size)
 
 	var pieces string
 	for i := 0; i < dataPackage.size; i++ {
@@ -85,26 +84,26 @@ func (c *Client) Upload(filePath, torrentPath string) {
 
 	err := torrent.Save(torrentPath)
 	if err != nil {
-		red.Printf("[fail] Save torrent file error: %v.\n", err)
+		red.Printf("Save torrent file error: %v\n", err)
 		return
 	}
 
 	key := torrent.makeKeyPackage()
-	yellow.Printf("File name: %s, size: %v bytes, piece num: %v.\n", torrent.Info.Name, torrent.Info.Length, key.size)
+	green.Printf("File name: %s, size: %v bytes, piece num: %v\n", torrent.Info.Name, torrent.Info.Length, key.size)
 
 	var buf bytes.Buffer
 	err = bencode.Marshal(&buf, torrent)
 	if err != nil {
-		red.Printf("[fail] Torrent marshal error: %v.\n", err)
+		red.Printf("Torrent marshal error: %v\n", err)
 	}
 	magnet := MakeMagnet(fmt.Sprintf("%x", key.infoHash))
-	torrentStr := buf.String()
+	torrentString := buf.String()
 
-	ok := c.UploadPackage(&key, &dataPackage)
+	ok := n.UploadPackage(&key, &dataPackage)
 	if ok {
-		yellow.Printf("Upload finished, create torrent file: %s\n", torrentPath)
-		c.node.Put(magnet, torrentStr)
-		yellow.Printf("Magnet URL: %s\n", magnet)
+		green.Printf("Upload finished, create torrent file: %s\n", torrentPath)
+		n.node.Put(magnet, torrentString)
+		cyan.Printf("Magnet URL: %s\n", magnet)
 	}
 }
 
@@ -115,47 +114,47 @@ type pieceWork struct {
 	result  DataPiece
 }
 
-func (c *Client) uploadPieceWork(keyPackage *KeyPackage, dataPackage *DataPackage, index int, retry int, workQueue *chan pieceWork) {
+func (n *Client) UploadPieceWork(keyPackage *KeyPackage, dataPackage *DataPackage, index int, retry int, ch *chan pieceWork) {
 	key := keyPackage.getKey(index)
-	ok := c.node.Put(key, string(dataPackage.data[index]))
+	ok := n.node.Put(key, string(dataPackage.data[index]))
 	if ok {
-		*workQueue <- pieceWork{index: index, success: true, retry: retry}
+		*ch <- pieceWork{index: index, success: true, retry: retry}
 	} else {
-		*workQueue <- pieceWork{index: index, success: false, retry: retry}
+		*ch <- pieceWork{index: index, success: false, retry: retry}
 	}
 }
 
-func (c *Client) UploadPackage(key *KeyPackage, data *DataPackage) bool {
-	workQueue := make(chan pieceWork, QueueLength)
-	for i := 0; i < key.size; i++ {
-		go c.uploadPieceWork(key, data, i, 0, &workQueue)
+func (n *Client) UploadPackage(keyPackage *KeyPackage, dataPackage *DataPackage) bool {
+	ch := make(chan pieceWork, QueueLength)
+	for i := 0; i < keyPackage.size; i++ {
+		go n.UploadPieceWork(keyPackage, dataPackage, i, 0, &ch)
 	}
 	donePieces := 0
-	for donePieces < key.size {
+	for donePieces < keyPackage.size {
 		select {
-		case work := <-workQueue:
-			if work.success {
+		case piece := <-ch:
+			if piece.success {
 				donePieces++
-				green.Printf("[success] Piece #%d uploaded.\n", work.index+1)
+				green.Printf("Piece #%d uploaded successfully\n", piece.index+1)
 			} else {
-				red.Printf("[fail] Piece #%d upload failed %d/%d.\n", work.index+1, work.retry, UploadRetryNum)
-				if work.retry < UploadRetryNum {
-					go c.uploadPieceWork(key, data, work.index, work.retry+1, &workQueue)
+				red.Printf("Piece #%d upload failed %d/%d\n", piece.index+1, piece.retry, UploadRetryNum)
+				if piece.retry < UploadRetryNum {
+					go n.UploadPieceWork(keyPackage, dataPackage, piece.index, piece.retry+1, &ch)
 				} else {
-					red.Println("[fail] Upload failed.")
+					red.Println("Upload failed :(")
 					return false
 				}
 			}
-		case <-time.After(UploadTimeout * time.Duration(key.size)):
-			red.Println("[fail] Upload timeout.")
+		case <-time.After(UploadTimeout * time.Duration(keyPackage.size)):
+			red.Println("Upload timeout :(")
 			return false
 		}
 	}
-	green.Println("[success] Upload finished.")
+	green.Println("Upload finished :)")
 	return true
 }
 
-func (c *Client) downloadPieceWork(k *KeyPackage, index int, retry int, workQueue *chan pieceWork) {
+func (c *Client) DownloadPieceWork(k *KeyPackage, index int, retry int, workQueue *chan pieceWork) {
 	key := k.getKey(index)
 	ok, piece := c.node.Get(key)
 	if ok {
@@ -165,46 +164,46 @@ func (c *Client) downloadPieceWork(k *KeyPackage, index int, retry int, workQueu
 	}
 }
 
-func (c *Client) DownLoad(key *KeyPackage) (bool, []byte) {
-	ret := make([]byte, key.length)
-	workQueue := make(chan pieceWork, QueueLength)
-	for i := 0; i < key.size; i++ {
-		go c.downloadPieceWork(key, i, 0, &workQueue)
+func (n *Client) DownLoad(keyPackage *KeyPackage) (bool, []byte) {
+	ret := make([]byte, keyPackage.length)
+	ch := make(chan pieceWork, QueueLength)
+	for i := 0; i < keyPackage.size; i++ {
+		go n.DownloadPieceWork(keyPackage, i, 0, &ch)
 	}
 
 	donePieces := 0
-	for donePieces < key.size {
+	for donePieces < keyPackage.size {
 		select {
-		case work := <-workQueue:
-			if work.success {
+		case piece := <-ch:
+			if piece.success {
 				donePieces++
-				bound := (work.index + 1) * PieceSize
-				if bound > key.length {
-					bound = key.length
+				bound := (piece.index + 1) * PieceSize
+				if bound > keyPackage.length {
+					bound = keyPackage.length
 				}
-				copy(ret[work.index*PieceSize:bound], work.result)
-				pieceHash, _ := PiecesHash(work.result, work.index)
-				if pieceHash != key.key[work.index] {
-					red.Printf("[fail] Check integrity of Piece #%d failed.\n", work.index+1)
+				copy(ret[piece.index*PieceSize:bound], piece.result)
+				pieceHash, _ := PiecesHash(piece.result, piece.index)
+				if pieceHash != keyPackage.key[piece.index] {
+					red.Printf("Check integrity of Piece #%d failed\n", piece.index+1)
 					return false, []byte{}
 				}
-				green.Printf("[success] Piece #%d downloaded.\n", work.index+1)
+				green.Printf("Piece #%d downloaded successfully\n", piece.index+1)
 			} else {
-				red.Printf("[fail] Piece #%d download failed %d/%d.\n", work.index+1, work.retry, DownloadRetryNum)
-				if work.retry < DownloadRetryNum {
-					go c.downloadPieceWork(key, work.index, work.retry+1, &workQueue)
+				red.Printf("Piece #%d download failed %d/%d\n", piece.index+1, piece.retry, DownloadRetryNum)
+				if piece.retry < DownloadRetryNum {
+					go n.DownloadPieceWork(keyPackage, piece.index, piece.retry+1, &ch)
 				} else {
-					red.Println("[fail] Download failed.")
+					red.Println("Download failed :(")
 					return false, []byte{}
 				}
 			}
-		case <-time.After(DownloadTimeout * time.Duration(key.size)):
-			red.Println("[fail] Download timeout.")
+		case <-time.After(DownloadTimeout * time.Duration(keyPackage.size)):
+			red.Println("Download timeout :(")
 			return false, []byte{}
 
 		}
 	}
 
-	green.Println("[success] File Downloaded.")
+	green.Println("File Downloaded :)")
 	return true, ret
 }

@@ -14,6 +14,7 @@ var (
 	red    = color.New(color.FgRed)
 	yellow = color.New(color.FgYellow)
 	blue   = color.New(color.FgBlue)
+	cyan   = color.New(color.FgCyan)
 )
 
 const (

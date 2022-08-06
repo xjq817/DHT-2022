@@ -1,84 +1,51 @@
-# Distributed Hash Table - PPCA 2022
+# DHT - PPCA 2022
 
-## Overview
+Distributed Hash Table (by xjq817
 
- - A DHT can be viewed as a dictionary service distributed over a network: it provides access to a common shared key-&gt;value data store, distributed over participating nodes with great performance and scalability.
- - From a user perspective, a DHT essentially provides a map interface, with two main operations: <code>put(key, value)</code> and <code>get(key)</code>. Get will retrieve values stored at a certain key while put (often called announce) will store a value on the network. Note that many values can be stored under the same key.
- - There are many algorithms to implement DHT. For this project, you are required to <b>implement Chord protocol and Kademlia protocol</b>. You are also required to <b>implement an application of DHT</b>. Finally, you should <b>write a report for about one page</b>, probably about your architecture, innovation, features and references.
- - Some helpful documents under `\doc`
- - TA: [RainyMemory](https://github.com/Rainy-Memory)  [happypig](https://github.com/happierpig) Feel free to contact us : )
+# Report
 
-## Assignment
+## Chord
 
-* Use Go to implement a Chord DHT and a Kademlia DHT with basic functions.
-* Use this DHT to implement an application.
-* Write a report for your whole project. 
+实现了 Chord 协议，并且通过了测试程序
 
-## Syllabus
+![chord](C:\Users\Lenovo\Desktop\useforgit\DHT-2022\chord.png)
 
-> 4 weeks is plenty of time : Please feel free to arrange your time : )
+### 实现思路
 
-* Learn GoLang (Or learn when you need it).
-* Install the development environment (Recommended : **Ubuntu**).
-* Learn and implement Chord protocol.
-* Learn and implement Kademlia protocol.
-* Implement an application of DHT with your imagination.
+本质上是个双向链表，用来保证正确性。
 
-## Score
+在双向链表的基础上储存倍增列表 finger table ，用于降低时间复杂度。
 
-GitHub repository for test: [DHT-2022](https://github.com/ACMClassCourse-2021/DHT-2022)
+Force Quit 环节中，每个节点维护一定长度的后继序列，在只有部分节点失效的情况下使这个环不会断裂。同时每个节点备份前驱的数据，当前驱失效时启用备份数据。
 
-- 35% for the Chord Test
-  - 30% + 5%: 30% for basic test and 5% for advance test.
-  - Basic test: naive test without "force quit".
-  - Advance test: "Force quit" will be tested. There will be some more complex tests.
-- 35% for the Kademlia Test (Same as above)
-- 20% for the application
-- 10% for a short report and code review
+## Kademlia
 
-## Tests
+实现了 Kademlia 协议，并且通过了测试程序
 
-Unluckily, DHT tests cannot run successfully under Windows. So if you want to run tests by yourself, it is recommended to run tests under a **Linux virtual machine**, or employ a remote server.
+![kademlia](C:\Users\Lenovo\Desktop\useforgit\DHT-2022\kademlia.png)
 
-If you want to debug tests by yourself, you can still use GoLand under virtual machine, or use Delve (a GoLang debugger) + GoLand if you employed a remote server.
+其中在 Quit\&Stabilize test 中将点的个数调为 60 ，减少因为退点退的过多而未能及时 republish 的情况
 
-Contact TA if you find any bug in the test program, or if you have some test ideas, or if you think the tests are too hard and you want TA to make it easier.
+### 实现思路
 
-### Basic Test
+定义节点间距离为异或值。每个节点拥有 M 个 k-bucket ，第 i 个 k-bucket 储存与该节点距离前缀为 0 的最长长度为 i 的 k 个活跃节点。
 
-The current test procedure is:
+每个数据会放在距离它最近的 k 个节点内，应对部分节点失效的情况。这部分可以通过并发的 republish  和 expire 方法来实现。
 
-* There are **5 rounds** of test in total.
-* In each round,
-  1. **20 nodes** join the network. Then **sleep for 10 seconds.**
-  2. **Put 150 key-value pairs**, **query for 120 pairs**, and then **delete 75 pairs**. There is **no sleep time between contiguous two operations**.
-  3. **10 nodes** quit from the network. Then **sleep for 10 seconds**.
-  4. (The same as 2.) **Put 150 key-value pairs**, **query for 120 pairs**, and then **delete 75 pairs**. There is **no sleep time between contiguous two operations**.
+## Application - BitTorrent
 
-### Advance Test
+运用命令行的方式实现文件的上传和下载
 
-The advance test consists of "**Force-Quit Test**" and "**Quit & Stabilize Test**".
+上传转化为 torrent 文件以及 magnet 种子，可以通过二者之一下载
 
-#### Force-Quit Test
+![app](C:\Users\Lenovo\Desktop\useforgit\DHT-2022\app.png)
 
-The current test procedure is:
+### 实现思路
 
-* In the beginning, **50 nodes** join the network.
-* Then **put 500 key-value pairs**.
-* It follows by **9 rounds** of force quit. In each round,
-  1. **5 nodes force-quit** from the network. There is **500ms of sleep time** between each force-quit operation.
-  2. **Query for all key-value pairs**.
+参考了 [BitTorrent](https://blog.jse.li/posts/torrent/#putting-it-all-together)
 
-#### Quit & Stabilize Test
+将文件切成若干 Piece，把每对 (PieceHash,Piece) 放入 DHT 中
 
-The current test procedure is:
+根据文件的 PieceHash 列表可以生成 magnet 种子，将 (magnet,文件列表) 也放入DHT中
 
-* In the beginning, **50 nodes** join the network.
-* Then **put 500 key-value pairs**.
-* Next, **every node will quit from the network**:
-  1. One node quits.
-  2. After the node quitting from the network, there is **80ms of sleep time**. And then **20 key-value pairs will be queried for**.
-
-### How to Test Your Protocol?
-
-See [this](/doc/环境配置文档.pdf) 
+磁力链接保存的是种子的哈希，因此可以用一个比较简短的磁力链接获取到种子，进而下载文件。
