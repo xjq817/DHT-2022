@@ -5,13 +5,13 @@ package main
  */
 
 import (
-	"kademlia"
+	"chord"
 	"strconv"
 )
 
 func NewNode(port int) dhtNode {
 	// Todo: create a node and then return it.
-	var w kademlia.KadWrapper
+	var w chord.ChordWrapper
 	w.Initialize(GetLocalAddress() + ":" + strconv.Itoa(port))
 	return &w
 }
